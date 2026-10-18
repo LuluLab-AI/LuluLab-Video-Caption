@@ -1,4 +1,4 @@
 interface:
-  display_name: "视频字幕助手"
-  short_description: "按指定质量去除或生成视频硬字幕"
-  default_prompt: "使用 $video-caption-agent 按我要求的质量去除或添加这段视频的字幕。"
+  display_name: "Video Caption Assistant / 视频字幕助手"
+  short_description: "Remove, add, or replace video captions / 去除、添加或替换视频字幕"
+  default_prompt: "Use $video-caption-agent to remove, add, or replace captions in my video at the quality level I specify. / 使用 $video-caption-agent 按我指定的质量处理视频字幕。"

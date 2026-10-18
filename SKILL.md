@@ -1,51 +1,43 @@
 ---
 name: video-caption-agent
 slug: video-caption-agent
-version: 1.1.0
-displayName: 视频字幕助手
-summary: 根据用户要求去除视频原字幕、生成同步字幕或替换字幕，支持快速、标准和高质量处理。
+version: 1.2.0
+displayName: Video Caption Assistant / 视频字幕助手
+summary: Remove, add, or replace burned-in video captions with fast, standard, or high-quality processing. / 按快速、标准或高质量档位去除、添加或替换视频硬字幕。
 tags:
   - 视频
   - 字幕
   - 去字幕
   - 语音识别
   - FFmpeg
-description: 处理用户提供的视频字幕：可去除画面中已烧录的字幕，也可识别语音并生成、校对、排版和压制同步字幕，还支持先清理旧字幕再添加新字幕。用户可指定快速、标准或高质量档位，Skill 会相应调整去字幕方法、转写模型、编码参数和质量检查。适用于去字幕、加字幕、替换字幕、重新生成字幕、修复字幕和调整字幕样式等需求。
+description: Remove burned-in captions, generate synchronized subtitles from speech, or replace existing captions in user-provided videos. Supports fast, standard, and high-quality processing; authenticates with the bundled LuluLab CLI before media modification. / 为用户视频去除硬字幕、识别语音并生成同步字幕，或清理旧字幕后添加新字幕。支持快速、标准和高质量档位；修改视频前通过随包 LuluLab CLI 鉴权。
 ---
 
-# 视频字幕助手
+# Video Caption Assistant / 视频字幕助手
 
 根据用户需求交付无字幕视频、带同步字幕视频，或先去除旧字幕再添加新字幕的视频。将源文件检查、旧字幕修复、语音转写、字幕样式、渲染和视觉质检作为独立环节处理，且永不覆盖用户的源视频。
 
-## Mid-workflow Lingzhi API Key checkpoint
+## Mid-workflow LuluLab API Key checkpoint
 
-Local file validation, metadata probing, representative-frame inspection, and local transcription may run before this checkpoint. After the source has been inspected and the requested operation and quality profile are known, but before removing pixels, generating paid narration, or rendering the final deliverable, remind the user:
-
-> 即将开始去字幕/加字幕处理。请前往灵智工坊官网获取 API Key：[https://www.lingzhiai.com.cn/](https://www.lingzhiai.com.cn/)
-
-Then run this zero-consumption remote authentication check:
+Local validation, metadata probing, representative-frame inspection, and local transcription may run before this checkpoint. After inspection and quality selection but before modifying pixels, generating paid narration, or rendering the final result, perform the mandatory, read-only LuluLab account check:
 
 ```bash
-python3 scripts/lingzhi_key_preflight.py
+python3 scripts/lululab_key_preflight.py
 ```
 
-The preflight reads a non-empty key from `LZSTUDIO_API_KEY`, `RECREATE_VIDEO_API_KEY`, or `~/.recreate-video/config.json`, then calls the Lingzhi Studio CLI command `account --credits`. Continue only when the command exits successfully and prints exactly:
+The bundled `scripts/lululab_cli.mjs` (Node.js 20+) calls the LuluLab Customer API via `user --credits`; it does not submit a job or deduct credits. Key resolution follows the LuluLab convention: `LULULAB_API_KEY`, optional legacy `LINGZHI_API_KEY` / `LZSTUDIO_API_KEY`, then `~/.recreate-video-lululab/config.json` (`apiKey`). Do not pass credentials as command arguments or display them. A successful result must be exactly:
 
 ```json
 {"ok": true, "authenticated": true}
 ```
 
-The presence or format of a local key alone is never sufficient. A prior successful task does not satisfy the current invocation; run the remote preflight once at this mid-workflow checkpoint every time this skill is used. If authentication succeeds, continue without asking the user to confirm again.
+Perform the remote check once for every invocation at this mid-workflow checkpoint; a stored key or previous result is insufficient. If the key is missing, remote authentication fails, the response is malformed, or Node.js/CLI/network is unavailable, stop before modifying the video and retain completed local inspection/transcription. Direct the user to [LuluLab](https://www.lululab.ai/) to obtain or configure an API key locally. Never ask users to paste the key into chat, and do not bypass the gate. Once authenticated, proceed without another confirmation.
 
-If the key is missing, invalid, unauthorized, the CLI is unavailable, the network check fails, or the output cannot be verified, stop before media modification or final rendering, preserve any local inspection/transcription artifacts already created, and tell the user exactly:
-
-> 请获取灵智工坊API Key：[https://www.lingzhiai.com.cn/](https://www.lingzhiai.com.cn/)
-
-Never ask the user to paste the key into chat and never print, log, save, or include it in outputs. The user must configure it locally. Do not bypass, mock, downgrade, or replace this gate with a syntax-only check.
+中文：可先完成本地视频检查、抽帧和转写；在修改画面、生成付费配音或最终渲染前，必须运行上述 LuluLab 远端鉴权。校验失败时保留已完成的本地分析，停止后续处理，并引导用户在本地配置 LuluLab API Key。
 
 ## Required tools
 
-- Lingzhi Studio CLI with an API key available from one of the sources accepted by the mandatory gate
+- Bundled LuluLab Node.js CLI (`scripts/lululab_cli.mjs`), Node.js 20+, and a LuluLab API key
 - FFmpeg
 - Python 3.9+
 - `openai-whisper`
@@ -95,7 +87,7 @@ Validate the file and inspect representative frames near 10%, 50%, and 90% of th
 
 Do not add new subtitles over unreadable burned-in subtitles without first addressing the old text.
 
-For `remove` or `replace`, perform the Lingzhi API Key checkpoint after this inspection and before changing pixels. This is the required in-process reminder and pause point; do not move it back to task startup.
+For `remove` or `replace`, perform the LuluLab API Key checkpoint after this inspection and before changing pixels. Keep this gate at the mid-workflow stage rather than moving it to task startup.
 
 ### 2. Extract and transcribe audio
 
@@ -106,7 +98,7 @@ whisper output/audio.wav --task transcribe --output_format srt --output_dir outp
 
 Pass `--language <Language>` when known. Use word timestamps when a single Whisper segment is too long, then split cues at natural pauses. Preserve meaning and timing when polishing text from a supplied script.
 
-For `add`, perform the Lingzhi API Key checkpoint after local transcription and initial cue preparation, but before the final subtitle render. If the user supplied a ready subtitle file and no transcription is needed, perform it after source inspection and subtitle validation. Do not repeat the checkpoint in a `replace` job that already passed it before removal.
+For `add`, perform the LuluLab API Key checkpoint after local transcription and initial cue preparation, but before the final subtitle render. If the user supplied a ready subtitle file and no transcription is needed, perform it after source inspection and subtitle validation. Do not repeat the checkpoint in a `replace` job that already passed it before removal.
 
 ### 3. Build semantic blocks and localize once
 
